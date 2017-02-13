@@ -359,10 +359,10 @@ VEC *vm_mult(VEC *vec, MAT *mat)
 
     VEC *res = v_get(mat->n);
 
+    Real acc;
     for (u_int i = 0; i < res->dim; ++i)
     {
-        Real acc = 0;
-
+        acc = 0;
         for (u_int j = 0; j < vec->dim; ++j)
         {
             acc += vec->ve[j] * mat->me[j][i];
@@ -374,10 +374,72 @@ VEC *vm_mult(VEC *vec, MAT *mat)
     return res;
 }
 
+MAT *m_mult(MAT *mat1, MAT *mat2)
+{
+    if (mat1->n != mat2->m)
+    {
+        fprintf(stderr, "m_mult two matrix need to be compatible");
+        exit(-1);
+    }
+
+    MAT *res = m_get(mat1->m, mat2->n);
+
+    Real acc;
+
+    for (u_int i = 0; i < res->m; ++i)
+    {
+        for (u_int j = 0; j < res->n; ++j)
+        {
+            acc = 0;
+
+            for (u_int k = 0; k < mat1->n; ++k)
+            {
+                acc += mat1->me[i][k] * mat2->me[k][j];
+            }
+
+            res->me[i][j] = acc;
+        }
+    }
+
+    return res;
+}
+
+
+MAT *m_pow(MAT *mat, u_int n)
+{
+    if (mat->n != mat->m)
+    {
+        fprintf(stderr, "m_pow matrix need to be square");
+        exit(-1);
+    }
+
+    MAT *res = m_get(mat->m, mat->n);
+
+    if (n == 0)
+    {
+        for (u_int j = 0; j < mat->m; ++j)
+        {
+            res->me[j][j] = 1;
+        }
+
+        return res;
+    }
+
+    m_cp(mat, res);
+
+    for (u_int i = 1; i < n; ++i)
+    {
+        res = m_mult(res, mat);
+    }
+
+    return res;
+}
 
 void main()
 {
     u_int i, j;
+    u_int n = 200;
+    Real alpha = 0.9;
 
     MAT *G;
 
@@ -385,7 +447,6 @@ void main()
     fp = fopen("data/g.dat", "r");
     G = m_input(fp);
     fclose(fp);
-    m_output(stdout, G);
 
     VEC *succ;
     succ = v_get(G->m);
@@ -415,31 +476,42 @@ void main()
             if (H->me[i][j])
             {
                 H->me[i][j] = newVal;
+            } else if (succ->ve[i] == 0)
+            {
+                H->me[i][j] = 1.0 / H->n;
             }
-
         }
     }
 
 
-    VEC *U0 = v_get(H->m);
-    for (i = 0; i < U0->dim; ++i)
+    MAT *E = m_get(H->m, H->n);
+    for (i = 0; i < E->m; ++i)
     {
-        U0->ve[i] = 1.0 / H->m;
+        for (j = 0; j < E->n; ++j)
+        {
+            E->me[i][j] = alpha * H->me[i][j] + (1 - alpha) * 1 / E->m;
+        }
     }
 
 
-    VEC *U1 = vm_mult(U0, H);
+    VEC *U0 = v_get(E->m);
+    for (i = 0; i < U0->dim; ++i)
+    {
+        U0->ve[i] = 1.0 / E->m;
+    }
 
-    v_output(stdout, succ);
-    m_output(stdout, H);
-    v_output(stdout, U0);
-    v_output(stdout, U1);
+
+    VEC *Un = vm_mult(U0, m_pow(E, n));
+
+    m_output(stdout, E);
+    v_output(stdout, Un);
 
 
     v_free(U0);
-    v_free(U1);
+    v_free(Un);
     v_free(succ);
     m_free(H);
+    m_free(E);
     m_free(G);
 
 //    SMAT *SG;
